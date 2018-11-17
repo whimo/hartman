@@ -2,7 +2,10 @@ import cv2
 import sys
 import time
 import matplotlib.pyplot as plt
+import numpy as np
 import keras
+from peakutils import indexes
+from datetime import datetime
 
 from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D, AveragePooling2D
@@ -87,6 +90,17 @@ while True:
 
 video_capture.release()
 cv2.destroyAllWindows()
+
+states = np.array(states)
+
+joke_indexes = indexes(states, thres=0.5, min_dist=30)
+joke_scores = states - np.median(states)
+joke_scores /= max(joke_scores)
+
+for i in joke_indexes:
+    secs = times[i] - times[0]
+    mins = secs // 60
+    print('{}:{}'.format(mins, round(secs % 60)), joke_scores[i])
 
 plt.plot(states)
 plt.show()
