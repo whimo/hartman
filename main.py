@@ -93,6 +93,9 @@ while True:
         cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
         happiness, resized_grayscale = estimate_happiness(face_image_gray)
 
+        vis_happiness = ('|' * int(happiness * 50)).ljust(50, '.')
+        print('\r|' + vis_happiness + '|', end='')
+
         states.append(happiness)
         times.append(time.time())
 
@@ -103,7 +106,6 @@ while True:
 
 video_capture.release()
 cv2.destroyAllWindows()
-
 
 states = np.array(states)
 times = np.array(times)
@@ -124,7 +126,6 @@ df = pandas.DataFrame({'timestamp': [], 'score': []})
 for joke_num, i in enumerate(joke_indexes):
     secs = times[i]
     mins = secs // 60
-    print('{}:{}'.format(round(mins), round(secs % 60)), joke_scores[i])
     df.loc[joke_num + 1] = [int(secs), joke_scores[i]]
 
 df['timestamp'] = df['timestamp'].astype(np.int32)
