@@ -11,6 +11,15 @@ from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D, AveragePooling2D
 from keras.layers import Dense, Dropout, Flatten
 
+IMAGE_SIZE = 48
+VIDEO_SOURCE = 0  # 0 for webcam
+
+# Technical hyperparameters
+SMOOTH_BOX_SIZE = 16
+POLYFIT_COEF = 30
+THRESHOLD_COEF = 2.5
+MIN_DISTANCE = 30
+
 
 def mmad(array):  # Modified median absolute deviation
     med = np.median(array)
@@ -33,7 +42,7 @@ face_cascade = cv2.CascadeClassifier(cascade_path)
 def create_model():
     model = Sequential()
 
-    model.add(Conv2D(64, (5, 5), activation='relu', input_shape=(48, 48, 1)))
+    model.add(Conv2D(64, (5, 5), activation='relu', input_shape=(IMAGE_SIZE, IMAGE_SIZE, 1)))
     model.add(MaxPooling2D(pool_size=(5, 5), strides=(2, 2)))
 
     model.add(Conv2D(64, (3, 3), activation='relu'))
@@ -65,13 +74,13 @@ model.load_weights(weights_path)
 
 
 def estimate_happiness(face_image_gray):
-    resized_img = cv2.resize(face_image_gray, (48, 48), interpolation = cv2.INTER_AREA)
-    image = resized_img.reshape(1, 48, 48, 1) / 255.0
+    resized_img = cv2.resize(face_image_gray, (IMAGE_SIZE, IMAGE_SIZE), interpolation = cv2.INTER_AREA)
+    image = resized_img.reshape(1, IMAGE_SIZE, IMAGE_SIZE, 1) / 255.0
     happiness = model.predict(image, batch_size=1)
     return happiness[0][0], resized_img
 
 
-video_capture = cv2.VideoCapture(0)
+video_capture = cv2.VideoCapture(VIDEO_SOURCE)
 states = []
 times = []
 
@@ -107,20 +116,20 @@ while True:
 video_capture.release()
 cv2.destroyAllWindows()
 
+
 states = np.array(states)
 times = np.array(times)
 med = np.median(states)
-states = smooth(states, 16)
+states = smooth(states, SMOOTH_BOX_SIZE)
 
 joke_scores = states - np.median(states)
 joke_scores /= max(joke_scores)
 
-bl = baseline(states, deg=9)
-
-states -= bl
 times -= times[0]
+bl = baseline(states, deg=int(round(times[-1] / POLYFIT_COEF)))
+states -= bl
 
-joke_indexes = indexes(states, thres=mmad(states) * 2.5, min_dist=30)
+joke_indexes = indexes(states, thres=mmad(states) * THRESHOLD_COEF, min_dist=MIN_DISTANCE)
 
 df = pandas.DataFrame({'timestamp': [], 'score': []})
 for joke_num, i in enumerate(joke_indexes):
@@ -136,4 +145,5 @@ plt.plot(times, bl, color='g')
 plt.scatter(times[joke_indexes], (states + bl)[joke_indexes], color='r')
 for i, score in enumerate(joke_scores[joke_indexes]):
     plt.annotate(str(round(score, 3)), (times[joke_indexes][i], (states + bl)[joke_indexes][i]))
+
 plt.show()
