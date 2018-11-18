@@ -5,11 +5,22 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas
 import keras
-from peakutils import indexes
+from peakutils import indexes, baseline
 
 from keras.models import Sequential
 from keras.layers import Conv2D, MaxPooling2D, AveragePooling2D
 from keras.layers import Dense, Dropout, Flatten
+
+
+def mmad(array):  # Modified median absolute deviation
+    med = np.median(array)
+    return np.mean(np.abs(array - med))
+
+
+def smooth(array, box_pts):  # Quick smooth
+    box = np.ones(box_pts) / box_pts
+    smooth = np.convolve(array, box, mode='same')
+    return smooth
 
 
 cascade_path = sys.argv[1]
@@ -93,15 +104,25 @@ while True:
 video_capture.release()
 cv2.destroyAllWindows()
 
-states = np.array(states)
 
-joke_indexes = indexes(states, thres=0.5, min_dist=30)
+states = np.array(states)
+times = np.array(times)
+med = np.median(states)
+states = smooth(states, 16)
+
 joke_scores = states - np.median(states)
 joke_scores /= max(joke_scores)
 
+bl = baseline(states, deg=9)
+
+states -= bl
+times -= times[0]
+
+joke_indexes = indexes(states, thres=mmad(states) * 2.5, min_dist=30)
+
 df = pandas.DataFrame({'timestamp': [], 'score': []})
 for joke_num, i in enumerate(joke_indexes):
-    secs = times[i] - times[0]
+    secs = times[i]
     mins = secs // 60
     print('{}:{}'.format(round(mins), round(secs % 60)), joke_scores[i])
     df.loc[joke_num + 1] = [int(secs), joke_scores[i]]
@@ -109,6 +130,9 @@ for joke_num, i in enumerate(joke_indexes):
 df['timestamp'] = df['timestamp'].astype(np.int32)
 df.to_csv(output_path, index=False)
 
-
-plt.plot(states)
+plt.plot(times, states + bl)
+plt.plot(times, bl, color='g')
+plt.scatter(times[joke_indexes], (states + bl)[joke_indexes], color='r')
+for i, score in enumerate(joke_scores[joke_indexes]):
+    plt.annotate(str(round(score, 3)), (times[joke_indexes][i], (states + bl)[joke_indexes][i]))
 plt.show()
